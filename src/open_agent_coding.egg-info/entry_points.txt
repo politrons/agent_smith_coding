@@ -1,2 +1,3 @@
 [console_scripts]
+agent-smith-coding = open_agent_coding.app:cli
 open-agent-coding = open_agent_coding.app:cli

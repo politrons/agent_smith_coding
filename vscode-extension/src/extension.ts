@@ -1,8 +1,8 @@
 import * as vscode from "vscode";
 import { ChildProcessWithoutNullStreams, execFileSync, spawn } from "child_process";
 import { createHash } from "crypto";
-import { Dirent, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "fs";
-import { basename, dirname, isAbsolute, join, relative } from "path";
+import { Dirent, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "fs";
+import { basename, delimiter, dirname, isAbsolute, join, relative } from "path";
 
 type AgentName = "browser" | "coding_workflow" | "coder" | "evaluator" | "filesystem" | "memory" | "planner" | "terminal";
 type ChatRole = "user" | "assistant" | "system";
@@ -33,7 +33,11 @@ interface AgentPhaseResult {
 
 interface RunSettings {
   pythonPath: string;
+  bootstrapPythonPath: string;
+  usesManagedPython: boolean;
   projectPath: string;
+  backendPath: string;
+  configPath: string;
   targetWorkspace: string;
   memoryFilePath: string;
   model: string;
@@ -44,6 +48,13 @@ interface RunSettings {
   browserModel: string;
   coderModel: string;
   warnings: string[];
+}
+
+interface PythonVersion {
+  major: number;
+  minor: number;
+  patch: number;
+  display: string;
 }
 
 const output = vscode.window.createOutputChannel("Agent Smith Coding");
@@ -173,12 +184,29 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
 
     output.appendLine(`> ${agent} · coding=${settings.codingModel} browser=${settings.browserModel} [${settings.targetWorkspace}]`);
     output.appendLine(`python: ${settings.pythonPath}`);
+    output.appendLine(`backend: ${settings.backendPath}`);
+    output.appendLine(`runtime: ${settings.projectPath}`);
     output.appendLine(`memory: ${settings.memoryFilePath}`);
     if (settings.warnings.length > 0) {
       output.appendLine(`warnings: ${settings.warnings.join(" | ")}`);
     }
     output.appendLine(`models: memory=${settings.memoryModel}, planner=${settings.plannerModel}, filesystem=${settings.filesystemModel}, browser=${settings.browserModel}, coder=${settings.coderModel}`);
     output.appendLine(prompt);
+
+    try {
+      await this.ensureBackendRuntime(settings, assistantIndex);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.messages[assistantIndex].content = `Failed to prepare Agent Smith Coding backend: ${message}`;
+      this.messages[assistantIndex].pending = false;
+      this.messages[assistantIndex].status = undefined;
+      this.appendRuntimeLog(assistantIndex, `runtime: backend setup failed - ${message}`);
+      this.busy = false;
+      this.stopRequested = false;
+      this.currentProcess = undefined;
+      this.postState();
+      return;
+    }
 
     if (agent === "coding_workflow") {
       await this.runControlledWorkflow(prompt, settings, assistantIndex);
@@ -218,7 +246,9 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
           MCP_TERMINAL_ROOT: settings.targetWorkspace,
           MCP_TERMINAL_TIMEOUT_SECONDS: "120",
           AGENT_SMITH_TERMINAL_LOG: this.terminalLogPath(settings),
-          PYTHONPATH: this.mergePythonPath(settings.projectPath)
+          FAST_AGENT_CONFIG: settings.configPath,
+          AGENT_SMITH_PYTHON: settings.pythonPath,
+          PYTHONPATH: this.mergePythonPath(settings)
         }
       }
     );
@@ -659,7 +689,9 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
             MCP_TERMINAL_ROOT: settings.targetWorkspace,
             MCP_TERMINAL_TIMEOUT_SECONDS: "120",
             AGENT_SMITH_TERMINAL_LOG: this.terminalLogPath(settings),
-            PYTHONPATH: this.mergePythonPath(settings.projectPath)
+            FAST_AGENT_CONFIG: settings.configPath,
+            AGENT_SMITH_PYTHON: settings.pythonPath,
+            PYTHONPATH: this.mergePythonPath(settings)
           }
         }
       );
@@ -818,7 +850,9 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
           detached: true,
           env: {
             ...process.env,
-            PYTHONPATH: this.mergePythonPath(settings.projectPath)
+            FAST_AGENT_CONFIG: settings.configPath,
+            AGENT_SMITH_PYTHON: settings.pythonPath,
+            PYTHONPATH: this.mergePythonPath(settings)
           }
         }
       );
@@ -1627,7 +1661,10 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
 
   private readSettings(requestedCodingModel?: string, requestedBrowserModel?: string): RunSettings {
     const config = vscode.workspace.getConfiguration("agentSmithCoding");
-    const projectPath = config.get<string>("projectPath") ?? "/Users/politrons/development/agent_smith_coding";
+    const configuredBackendPath = config.get<string>("projectPath")?.trim();
+    const backendPath = configuredBackendPath || this.packagedBackendPath();
+    const projectPath = this.backendRuntimePath();
+    const configPath = join(projectPath, "fast-agent.yaml");
     const targetWorkspace = config.get<string>("targetWorkspace")?.trim();
     const activeWorkspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     const resolvedPython = this.resolvePythonPath(projectPath, config.get<string>("pythonPath"));
@@ -1646,7 +1683,11 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
 
     return {
       pythonPath: resolvedPython.pythonPath,
+      bootstrapPythonPath: resolvedPython.bootstrapPythonPath,
+      usesManagedPython: resolvedPython.usesManagedPython,
       projectPath,
+      backendPath,
+      configPath,
       targetWorkspace: resolvedWorkspace,
       memoryFilePath: this.memoryFilePathForWorkspace(resolvedWorkspace),
       model: coderModel,
@@ -2147,63 +2188,319 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
     return compact.length > 180 ? `${compact.slice(0, 177)}...` : compact;
   }
 
-  private resolvePythonPath(projectPath: string, configuredPythonPath: string | undefined): { pythonPath: string; warnings: string[] } {
+  private packagedBackendPath(): string {
+    return join(this.context.extensionUri.fsPath, "backend");
+  }
+
+  private backendRuntimePath(): string {
+    const root = this.context.globalStorageUri ?? this.context.storageUri;
+    const base = root?.fsPath ?? join(this.context.extensionUri.fsPath, ".agent-smith-runtime");
+    return join(base, "backend-runtime");
+  }
+
+  private managedVenvPythonPath(runtimePath: string): string {
+    return process.platform === "win32"
+      ? join(runtimePath, ".venv", "Scripts", "python.exe")
+      : join(runtimePath, ".venv", "bin", "python");
+  }
+
+  private resolvePythonPath(
+    runtimePath: string,
+    configuredPythonPath: string | undefined
+  ): { pythonPath: string; bootstrapPythonPath: string; usesManagedPython: boolean; warnings: string[] } {
     const warnings: string[] = [];
     const configured = configuredPythonPath?.trim();
+    const bootstrapPythonPath = this.detectBootstrapPython(warnings);
 
     if (configured) {
       if (!isAbsolute(configured) || existsSync(configured)) {
-        return { pythonPath: configured, warnings };
+        return { pythonPath: configured, bootstrapPythonPath, usesManagedPython: false, warnings };
       }
 
       warnings.push(`Configured Python does not exist: ${configured}`);
     }
 
-    const projectVenvPython = join(projectPath, ".venv", "bin", "python");
-    const candidates = [
-      projectVenvPython,
-      "/opt/homebrew/bin/python3.14",
-      "/opt/homebrew/bin/python3",
-      "/usr/local/bin/python3",
-      "/usr/bin/python3"
-    ];
+    return {
+      pythonPath: this.managedVenvPythonPath(runtimePath),
+      bootstrapPythonPath,
+      usesManagedPython: true,
+      warnings
+    };
+  }
+
+  private detectBootstrapPython(warnings: string[]): string {
+    const candidates = ["python3.14", "python3.13", "python3", "python"];
+    const rejected: string[] = [];
 
     for (const candidate of candidates) {
-      if (existsSync(candidate)) {
-        if (candidate !== projectVenvPython) {
-          warnings.push(
-            [
-              `Project virtualenv not found: ${projectVenvPython}`,
-              `Using fallback Python: ${candidate}`,
-              "If the agent exits with ModuleNotFoundError, run the root setup:",
-              "cd /Users/politrons/development/agent_smith_coding",
-              "/opt/homebrew/bin/python3.14 -m venv .venv",
-              ". .venv/bin/activate",
-              "pip install -U pip",
-              "pip install -e .",
-              "npm install"
-            ].join("\n")
-          );
-        }
-
-        return { pythonPath: candidate, warnings };
+      const version = this.pythonVersion(candidate);
+      if (version && this.isSupportedPythonVersion(version)) {
+        return candidate;
+      }
+      if (version) {
+        rejected.push(`${candidate} ${version.display}`);
       }
     }
 
-    warnings.push(
-      [
-        `Project virtualenv not found: ${projectVenvPython}`,
-        "No absolute Python candidate was found. Trying python3 from PATH."
-      ].join("\n")
-    );
-
-    return { pythonPath: "python3", warnings };
+    const found = rejected.length > 0 ? ` Found: ${rejected.join(", ")}.` : "";
+    warnings.push(`No compatible Python was found on PATH.${found} Agent Smith requires Python >=3.13.5,<3.15.`);
+    return "python3";
   }
 
-  private mergePythonPath(projectPath: string): string {
-    const sourcePath = `${projectPath}/src`;
+  private pythonVersion(command: string): PythonVersion | undefined {
+    try {
+      const outputText = execFileSync(
+        command,
+        ["-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')"],
+        {
+          encoding: "utf8",
+          timeout: 2000
+        }
+      ).trim();
+      const match = outputText.match(/^(\d+)\.(\d+)\.(\d+)/);
+      if (!match) {
+        return undefined;
+      }
+      return {
+        major: Number(match[1]),
+        minor: Number(match[2]),
+        patch: Number(match[3]),
+        display: outputText
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  private isSupportedPythonVersion(version: PythonVersion): boolean {
+    if (version.major !== 3) {
+      return false;
+    }
+    if (version.minor === 13) {
+      return version.patch >= 5;
+    }
+    return version.minor === 14;
+  }
+
+  private assertSupportedPython(command: string, label: string): PythonVersion {
+    const version = this.pythonVersion(command);
+    if (!version) {
+      throw new Error(`${label} Python was not found: ${command}. Install Python >=3.13.5,<3.15 or set agentSmithCoding.pythonPath to a compatible interpreter.`);
+    }
+    if (!this.isSupportedPythonVersion(version)) {
+      throw new Error(`${label} Python ${version.display} is not supported. Agent Smith requires Python >=3.13.5,<3.15 because fast-agent-mcp requires that range.`);
+    }
+    return version;
+  }
+
+  private async ensureBackendRuntime(settings: RunSettings, assistantIndex: number): Promise<void> {
+    if (!existsSync(join(settings.backendPath, "src", "open_agent_coding", "app.py"))) {
+      throw new Error(`packaged backend not found at ${settings.backendPath}`);
+    }
+    mkdirSync(settings.projectPath, { recursive: true });
+    mkdirSync(join(settings.projectPath, "data"), { recursive: true });
+    this.writeManagedFastAgentConfig(settings);
+
+    this.assertSupportedPython(settings.bootstrapPythonPath, "Bootstrap");
+    if (!settings.usesManagedPython) {
+      this.assertSupportedPython(settings.pythonPath, "Configured");
+    }
+    const activeVersion = this.pythonVersion(settings.pythonPath);
+    if (settings.usesManagedPython && existsSync(settings.pythonPath) && !activeVersion) {
+      this.appendRuntimeLog(
+        assistantIndex,
+        "runtime: removing unusable managed Python virtualenv"
+      );
+      rmSync(join(settings.projectPath, ".venv"), { recursive: true, force: true });
+    }
+    if (activeVersion && !this.isSupportedPythonVersion(activeVersion)) {
+      if (!settings.usesManagedPython) {
+        throw new Error(`Configured Python ${activeVersion.display} is not supported. Agent Smith requires Python >=3.13.5,<3.15 because fast-agent-mcp requires that range.`);
+      }
+      this.appendRuntimeLog(
+        assistantIndex,
+        `runtime: removing incompatible managed Python ${activeVersion.display}`
+      );
+      rmSync(join(settings.projectPath, ".venv"), { recursive: true, force: true });
+    }
+
+    if (this.pythonCanImport(settings.pythonPath, "fast_agent", settings)) {
+      this.appendRuntimeLog(assistantIndex, "runtime: managed backend already installed");
+      return;
+    }
+
+    this.appendRuntimeLog(
+      assistantIndex,
+      "runtime: preparing managed Python backend in VS Code global storage",
+      "Preparing Agent Smith backend..."
+    );
+
+    if (settings.usesManagedPython && !existsSync(settings.pythonPath)) {
+      await this.runSetupProcess(
+        settings.bootstrapPythonPath,
+        ["-m", "venv", join(settings.projectPath, ".venv")],
+        settings.projectPath,
+        assistantIndex,
+        "runtime: creating managed Python virtualenv"
+      );
+    }
+
+    await this.runSetupProcess(
+      settings.pythonPath,
+      [
+        "-m",
+        "pip",
+        "install",
+        "fast-agent-mcp>=0.7.12,<0.8.0",
+        "pydantic-evals>=1.107.0,<2.0.0"
+      ],
+      settings.projectPath,
+      assistantIndex,
+      "runtime: installing managed backend dependencies"
+    );
+
+    if (!this.pythonCanImport(settings.pythonPath, "fast_agent", settings)) {
+      throw new Error("managed Python backend installed, but fast_agent still cannot be imported");
+    }
+
+    this.appendRuntimeLog(assistantIndex, "runtime: managed backend ready", "Agent Smith backend ready.");
+  }
+
+  private pythonCanImport(pythonPath: string, moduleName: string, settings: RunSettings): boolean {
+    if (isAbsolute(pythonPath) && !existsSync(pythonPath)) {
+      return false;
+    }
+    try {
+      execFileSync(pythonPath, ["-c", `import ${moduleName}`], {
+        cwd: settings.projectPath,
+        env: {
+          ...process.env,
+          PYTHONPATH: this.mergePythonPath(settings)
+        },
+        timeout: 5000,
+        stdio: "ignore"
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private runSetupProcess(
+    command: string,
+    args: string[],
+    cwd: string,
+    assistantIndex: number,
+    logLine: string
+  ): Promise<void> {
+    this.appendRuntimeLog(assistantIndex, logLine);
+    return new Promise((resolve, reject) => {
+      const child = spawn(command, args, { cwd, env: process.env });
+      let outputText = "";
+
+      child.stdout.on("data", (chunk: Buffer) => {
+        outputText += chunk.toString();
+      });
+      child.stderr.on("data", (chunk: Buffer) => {
+        outputText += chunk.toString();
+      });
+      child.on("error", (error: Error) => {
+        reject(error);
+      });
+      child.on("close", (code: number | null) => {
+        if (code === 0) {
+          resolve();
+          return;
+        }
+        reject(new Error(`${logLine} failed with code ${code ?? "unknown"}: ${this.clipForChat(outputText.trim(), 2000)}`));
+      });
+    });
+  }
+
+  private writeManagedFastAgentConfig(settings: RunSettings): void {
+    const q = (value: string) => JSON.stringify(value);
+    const backendSourcePath = join(settings.backendPath, "src");
+    const config = [
+      'default_model: "generic.qwen3.5:latest"',
+      "llm_retries: 0",
+      "",
+      "logger:",
+      "  transports: [console]",
+      "  level: info",
+      "  progress_display: true",
+      "",
+      "usage_telemetry:",
+      "  enabled: false",
+      "",
+      "generic:",
+      '  api_key: "ollama"',
+      '  base_url: "${OLLAMA_BASE_URL:http://localhost:11434/v1}"',
+      "",
+      "mcp:",
+      "  servers:",
+      "    filesystem:",
+      '      transport: "stdio"',
+      `      command: ${q(settings.pythonPath)}`,
+      "      args:",
+      '        - "-m"',
+      '        - "open_agent_coding.filesystem_mcp"',
+      "      env:",
+      `        PYTHONPATH: ${q(backendSourcePath)}`,
+      `        MCP_FILESYSTEM_ROOT: ${q(settings.targetWorkspace)}`,
+      "      read_timeout_seconds: 60",
+      "",
+      "    sequential_thinking:",
+      '      transport: "stdio"',
+      `      command: ${q(settings.pythonPath)}`,
+      "      args:",
+      '        - "-m"',
+      '        - "open_agent_coding.sequential_thinking_mcp"',
+      "      env:",
+      `        PYTHONPATH: ${q(backendSourcePath)}`,
+      "      read_timeout_seconds: 60",
+      "",
+      "    memory:",
+      '      transport: "stdio"',
+      `      command: ${q(settings.pythonPath)}`,
+      "      args:",
+      '        - "-m"',
+      '        - "open_agent_coding.memory_mcp"',
+      "      env:",
+      `        PYTHONPATH: ${q(backendSourcePath)}`,
+      `        MEMORY_FILE_PATH: ${q(settings.memoryFilePath)}`,
+      "      read_timeout_seconds: 45",
+      "",
+      "    browser:",
+      '      transport: "stdio"',
+      `      command: ${q(settings.pythonPath)}`,
+      "      args:",
+      '        - "-m"',
+      '        - "open_agent_coding.browser_mcp"',
+      "      env:",
+      `        PYTHONPATH: ${q(backendSourcePath)}`,
+      "      read_timeout_seconds: 60",
+      "",
+      "    terminal:",
+      '      transport: "stdio"',
+      `      command: ${q(settings.pythonPath)}`,
+      "      args:",
+      '        - "-m"',
+      '        - "open_agent_coding.terminal_mcp"',
+      "      env:",
+      `        PYTHONPATH: ${q(backendSourcePath)}`,
+      `        MCP_TERMINAL_ROOT: ${q(settings.targetWorkspace)}`,
+      '        MCP_TERMINAL_TIMEOUT_SECONDS: "120"',
+      `        AGENT_SMITH_TERMINAL_LOG: ${q(this.terminalLogPath(settings))}`,
+      "      read_timeout_seconds: 300",
+      ""
+    ].join("\n");
+    writeFileSync(settings.configPath, config, "utf8");
+  }
+
+  private mergePythonPath(settings: RunSettings): string {
+    const sourcePath = join(settings.backendPath, "src");
     const current = process.env.PYTHONPATH;
-    return current ? `${sourcePath}:${current}` : sourcePath;
+    return current ? `${sourcePath}${delimiter}${current}` : sourcePath;
   }
 
   private accentColor(): string {

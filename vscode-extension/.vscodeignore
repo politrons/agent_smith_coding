@@ -2,12 +2,16 @@ node_modules/**
 src/**
 .vscode/**
 *.vsix
+.DS_Store
 tsconfig.json
 package-lock.json
 
 !out/**
+!backend/**
+backend/**/__pycache__/**
+backend/**/*.pyc
+backend/.venv/**
 !resources/**
-resources/open-agent.svg
 !README.md
 !CHANGELOG.md
 !SUPPORT.md

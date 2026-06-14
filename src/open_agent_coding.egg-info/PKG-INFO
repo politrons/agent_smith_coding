@@ -1,5 +1,5 @@
 Metadata-Version: 2.4
-Name: open-agent-coding
+Name: agent-smith-coding
 Version: 0.1.0
 Summary: Local Agent Smith Coding assistant with filesystem, memory, browser, and sequential-thinking MCP agents.
 Requires-Python: <3.15,>=3.13.5

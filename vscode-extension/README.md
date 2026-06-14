@@ -1,6 +1,6 @@
 # Agent Smith Coding VS Code Extension
 
-VS Code chat UI for the local Agent Smith Coding FastAgent assistant.
+VS Code chat UI for the Agent Smith Coding FastAgent assistant.
 
 ## What It Does
 
@@ -29,7 +29,7 @@ VS Code chat UI for the local Agent Smith Coding FastAgent assistant.
 - Adds a square Stop button next to Send to terminate a stuck local agent run.
 - Lets you choose separate local open-source models for Coding and Browser.
   Coding defaults to `qwen3-coder:30b`; Browser defaults to `qwen3.5:latest`.
-- Sends each prompt to the Python FastAgent app.
+- Sends each prompt to the packaged Python FastAgent app.
 - Uses the active VS Code workspace as `MCP_FILESYSTEM_ROOT`, so the agent works
   on the project you opened.
 - Adds a best-effort workspace snapshot to every prompt before MCP execution,
@@ -40,8 +40,8 @@ VS Code chat UI for the local Agent Smith Coding FastAgent assistant.
 - Treats Memory MCP as context only. Old prompts, old plans, and remembered
   next steps are not active work; the latest chat prompt is the only active
   task.
-- Gives the backend Browser MCP access, so the coding agent can consult current
-  external docs and package metadata when local context is not enough.
+- Gives the backend Browser MCP access for explicit URL fetches when local
+  context is not enough.
 - Instructs the Coder to infer the detected technology stack, create/update
   focused tests for new functionality using that stack's conventions, and use
   Browser MCP when it is unsure how to test or validate the project.
@@ -88,7 +88,7 @@ Use `Cmd+Enter` or `Ctrl+Enter` from the textarea to send.
 ```json
 {
   "agentSmithCoding.pythonPath": "",
-  "agentSmithCoding.projectPath": "/Users/politrons/development/agent_smith_coding",
+  "agentSmithCoding.projectPath": "",
   "agentSmithCoding.targetWorkspace": "",
   "agentSmithCoding.defaultAgent": "coding_workflow",
   "agentSmithCoding.defaultModel": "qwen3-coder:30b",
@@ -113,11 +113,14 @@ Use `Cmd+Enter` or `Ctrl+Enter` from the textarea to send.
 }
 ```
 
-Leave `pythonPath` empty for auto-detection. The extension tries:
+Leave `pythonPath` empty for normal use. On first run, the extension creates a
+managed virtualenv under VS Code global storage with Python `>=3.13.5,<3.15`
+and installs the backend Python dependencies there. Set `pythonPath` only when
+developing or debugging a custom backend environment.
 
-1. `/Users/politrons/development/agent_smith_coding/.venv/bin/python`
-2. `/opt/homebrew/bin/python3.14`
-3. `python3`
+Leave `projectPath` empty for normal installed-extension use. The extension uses
+the backend bundled inside the VSIX. Set it only when developing against a
+source checkout.
 
 `targetWorkspace` is optional. Leave it empty to use the project currently open
 in VS Code. Set it to an absolute folder path when you want the agent to work on
@@ -127,8 +130,7 @@ a different project.
 selection, not the planner/coder/terminal implementation details.
 
 `defaultCodingModel` controls the Coding selector. `defaultBrowserModel`
-controls the Browser selector and follows the `Dive-into-Python` Browser MCP
-POC default, `qwen3.5:latest`. The per-agent model settings are optional escape
+controls the Browser selector. The per-agent model settings are optional escape
 hatches.
 
 `accentColor` and `chatFontFamily` let you customize the Matrix-inspired chat
@@ -153,31 +155,28 @@ look without editing TypeScript. Example:
 - `Agent Smith Coding: Ask Planner`
 - `Agent Smith Coding: Ask Terminal`
 
-## Install In Any Local VS Code Project
+## Package And Install Locally
 
 Build a local VSIX package:
 
 ```bash
-cd /Users/politrons/development/agent_smith_coding/vscode-extension
 npm install
-npm run compile
-npx vsce package
+npm run package
 ```
 
 Install it in VS Code:
 
 ```bash
-code --install-extension agent-smith-coding-0.1.26.vsix
+code --install-extension agent-smith-coding-0.1.29.vsix --force
 ```
 
 Then open any project folder in VS Code. The `Agent Smith` Activity Bar icon
-appears there too. The extension still needs the local Python backend from this
-repo, so keep these settings pointing to the backend install:
+appears there too. Keep the backend settings empty for normal use:
 
 ```json
 {
-  "agentSmithCoding.projectPath": "/Users/politrons/development/agent_smith_coding",
-  "agentSmithCoding.pythonPath": "/Users/politrons/development/agent_smith_coding/.venv/bin/python",
+  "agentSmithCoding.projectPath": "",
+  "agentSmithCoding.pythonPath": "",
   "agentSmithCoding.targetWorkspace": ""
 }
 ```

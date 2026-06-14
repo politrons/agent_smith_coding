@@ -1,4 +1,4 @@
-"""Open Agent Coding package."""
+"""Agent Smith Coding package."""
 
 __all__ = ["__version__"]
 

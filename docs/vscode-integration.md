@@ -55,10 +55,9 @@ agent process and prevents the controlled workflow from entering the next phase.
 Development flow:
 
 ```bash
-cd /Users/politrons/development/agent_smith_coding/vscode-extension
+cd vscode-extension
 npm install
 npm run compile
-npx playwright install firefox
 code .
 ```
 
@@ -71,7 +70,7 @@ Configure these VS Code settings if needed:
 ```json
 {
   "agentSmithCoding.pythonPath": "",
-  "agentSmithCoding.projectPath": "/Users/politrons/development/agent_smith_coding",
+  "agentSmithCoding.projectPath": "",
   "agentSmithCoding.targetWorkspace": "",
   "agentSmithCoding.defaultAgent": "coding_workflow",
   "agentSmithCoding.defaultModel": "qwen3-coder:30b",
@@ -96,9 +95,11 @@ Configure these VS Code settings if needed:
 }
 ```
 
-Leave `pythonPath` empty for auto-detection. Leave `targetWorkspace` empty for
-normal installed-extension use. Set it to an absolute path when debugging
-against a specific project folder.
+Leave `pythonPath` empty for normal installed-extension use. The extension
+creates a managed virtualenv in VS Code global storage on first run. Leave
+`projectPath` empty to use the backend packaged inside the VSIX. The managed
+backend requires Python `>=3.13.5,<3.15`. Leave `targetWorkspace` empty to use
+the active VS Code project.
 
 ## Level 2: Persistent ACP Server
 
@@ -130,20 +131,18 @@ Use this when you want to install the extension into any VS Code project on this
 machine without publishing it publicly:
 
 ```bash
-cd /Users/politrons/development/agent_smith_coding/vscode-extension
+cd vscode-extension
 npm install
-npm run compile
-npx vsce package
-code --install-extension agent-smith-coding-0.1.26.vsix
+npm run package
+code --install-extension agent-smith-coding-0.1.29.vsix --force
 ```
 
-Then open any project folder. Keep `agentSmithCoding.projectPath` pointing to the
-local backend checkout:
+Then open any project folder. Keep backend settings empty:
 
 ```json
 {
-  "agentSmithCoding.projectPath": "/Users/politrons/development/agent_smith_coding",
-  "agentSmithCoding.pythonPath": "/Users/politrons/development/agent_smith_coding/.venv/bin/python",
+  "agentSmithCoding.projectPath": "",
+  "agentSmithCoding.pythonPath": "",
   "agentSmithCoding.targetWorkspace": ""
 }
 ```
@@ -157,10 +156,9 @@ workspace.
 After the extension is functional:
 
 ```bash
-cd /Users/politrons/development/agent_smith_coding/vscode-extension
+cd vscode-extension
 npm install
-npm run compile
-npx vsce package
+npm run package
 npx vsce publish
 ```
 
@@ -170,14 +168,11 @@ Before publishing:
 - Add the real publisher id in `vscode-extension/package.json`.
 - Add `repository`, `license`, a Marketplace icon, and final categories.
 - Confirm the extension does not bundle secrets.
-- Document Ollama, Python 3.13.5+, Node, and MCP dependency setup.
-- Decide the backend distribution story:
-  - short term: users install this extension and configure `projectPath` to a
-    local backend checkout;
-  - better: publish the Python backend as a package and add an extension command
-    that bootstraps `.venv`, `pip install`, `npm install`, and Ollama checks;
-  - best IDE experience: ship or download the backend automatically and talk to
-    it through persistent ACP instead of one-shot CLI calls.
+- Document Ollama, Python 3.13.5+, and first-run network access for Python
+  dependency installation.
+- Confirm `npm run package` includes `backend/src/open_agent_coding`.
+- For the best IDE experience, replace the one-shot CLI bridge with persistent
+  ACP after Marketplace bootstrapping is stable.
 
 To publish the first time:
 

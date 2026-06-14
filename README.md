@@ -1,9 +1,10 @@
+![Agent Smith Coding](img/agent.png)
+
 # Agent Smith Coding
 
-Local FastAgent application for an IDE-style coding assistant. It is based on
-the same pattern used in `Dive-into-Python/com/politrons/ai`: minimal Python
-agents, MCP servers configured in YAML, local Ollama through an OpenAI-compatible
-endpoint, and MCP servers launched through stdio.
+Local FastAgent application for an IDE-style coding assistant. It uses minimal
+Python agents, MCP servers configured in YAML, local Ollama through an
+OpenAI-compatible endpoint, and MCP servers launched through stdio.
 
 ## Agents
 
@@ -31,9 +32,8 @@ Browser: generic.qwen3.5:latest
 ```
 
 `qwen3-coder:30b` is the default Coding model. `qwen3.5:latest` is the default
-Browser model because the Browser MCP POC in `Dive-into-Python/com/politrons/ai`
-uses it by default and it behaved better with Browser MCP tool calls through
-Ollama's OpenAI-compatible endpoint.
+Browser model for local tool-oriented prompts through Ollama's
+OpenAI-compatible endpoint.
 
 You can override per-agent models with environment variables:
 
@@ -54,7 +54,7 @@ python -m open_agent_coding.app --model generic.qwen2.5-coder:32b
 From this project root:
 
 ```bash
-/opt/homebrew/bin/python3.14 -m venv .venv
+python3 -m venv .venv
 . .venv/bin/activate
 pip install -U pip
 pip install -e .
@@ -64,10 +64,10 @@ ollama pull qwen3-coder:30b
 ollama pull qwen3.5:latest
 ```
 
-The filesystem MCP root defaults to this project:
+The filesystem MCP root defaults to the current working directory:
 
 ```text
-/Users/politrons/development/agent_smith_coding
+.
 ```
 
 Change it without editing code:
@@ -79,7 +79,7 @@ export MCP_FILESYSTEM_ROOT=/absolute/path/to/your/project
 The Memory MCP file defaults to this project for direct CLI use:
 
 ```text
-/Users/politrons/development/agent_smith_coding/data/default-memory.jsonl
+data/default-memory.jsonl
 ```
 
 When the VS Code extension runs the backend, it overrides that with a
@@ -126,11 +126,12 @@ planner pass, one coder pass, and one terminal validation pass. Planner is
 read-only and does not edit files, browse, or run commands. Memory is treated
 as completed project state, not as a backlog of tasks to execute. The latest
 user prompt is the only active task. The coder has direct Filesystem MCP access,
-workspace Memory MCP access, and Browser MCP access for current documentation
-or package metadata. The coder does not run terminal validation directly; it
-hands one exact validation command to the terminal agent. Each message is sent
-to this Python
-app as a CLI one-shot command, with the active VS Code workspace passed as
+workspace Memory MCP access, and Browser MCP access for explicit URL fetches.
+The coder does not run terminal validation directly; it hands one exact
+validation command to the terminal agent. The Marketplace extension packages
+this Python backend inside the VSIX and creates a managed virtualenv under VS
+Code global storage on first run. Each message is sent to that backend as a CLI
+one-shot command, with the active VS Code workspace passed as
 `MCP_FILESYSTEM_ROOT` and a workspace-specific memory file passed as
 `MCP_MEMORY_FILE_PATH`. The chat history is stored per VS Code workspace,
 capped to the latest 200 messages. The extension also adds a
@@ -165,7 +166,7 @@ an automatic repair loop.
 For extension development:
 
 ```bash
-cd /Users/politrons/development/agent_smith_coding/vscode-extension
+cd vscode-extension
 npm install
 npm run compile
 code .
@@ -178,16 +179,14 @@ with a persistent ACP client using the `--transport acp` mode.
 To install the extension in any local VS Code project without Marketplace:
 
 ```bash
-cd /Users/politrons/development/agent_smith_coding/vscode-extension
-npm run compile
-npx vsce package
-code --install-extension agent-smith-coding-0.1.26.vsix
+cd vscode-extension
+npm run package
+code --install-extension agent-smith-coding-0.1.29.vsix --force
 ```
 
-Then open any project folder. Keep `agentSmithCoding.projectPath` pointing to
-`/Users/politrons/development/agent_smith_coding`; leave
-`agentSmithCoding.targetWorkspace` empty so the agent operates on the currently
-opened project.
+Then open any project folder. Leave `agentSmithCoding.projectPath`,
+`agentSmithCoding.pythonPath`, and `agentSmithCoding.targetWorkspace` empty for
+normal installed-extension use.
 
 See `docs/vscode-integration.md` for development and Marketplace publishing
 steps.
