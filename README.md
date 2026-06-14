@@ -1,10 +1,10 @@
-![Agent Smith Coding](img/agent.png)
 
 # Agent Smith Coding
 
 Local FastAgent application for an IDE-style coding assistant. It uses minimal
 Python agents, MCP servers configured in YAML, local Ollama through an
 OpenAI-compatible endpoint, and MCP servers launched through stdio.
+![Agent Smith Coding](img/agent.png)
 
 ## Agents
 
