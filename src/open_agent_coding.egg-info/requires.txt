@@ -1,0 +1,2 @@
+fast-agent-mcp<0.8.0,>=0.7.12
+pydantic-evals<2.0.0,>=1.107.0

@@ -1,0 +1,12 @@
+README.md
+pyproject.toml
+src/open_agent_coding/__init__.py
+src/open_agent_coding/agent_run_evaluator.py
+src/open_agent_coding/app.py
+src/open_agent_coding/terminal_mcp.py
+src/open_agent_coding.egg-info/PKG-INFO
+src/open_agent_coding.egg-info/SOURCES.txt
+src/open_agent_coding.egg-info/dependency_links.txt
+src/open_agent_coding.egg-info/entry_points.txt
+src/open_agent_coding.egg-info/requires.txt
+src/open_agent_coding.egg-info/top_level.txt

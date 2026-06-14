@@ -1,0 +1,19 @@
+[project]
+name = "agent-smith-coding"
+version = "0.1.0"
+description = "Local Agent Smith Coding assistant with filesystem, memory, browser, and sequential-thinking MCP agents."
+requires-python = ">=3.13.5,<3.15"
+dependencies = [
+    "fast-agent-mcp>=0.7.12,<0.8.0",
+    "pydantic-evals>=1.107.0,<2.0.0",
+]
+
+[project.scripts]
+agent-smith-coding = "open_agent_coding.app:cli"
+open-agent-coding = "open_agent_coding.app:cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

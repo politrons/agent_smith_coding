@@ -1,0 +1,259 @@
+{
+  "name": "agent-smith-coding",
+  "displayName": "Agent Smith Coding",
+  "description": "VS Code bridge for the local Agent Smith Coding FastAgent app.",
+  "version": "0.1.26",
+  "publisher": "politrons",
+  "icon": "resources/agent.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/politrons/agent_smith_coding.git"
+  },
+  "homepage": "https://github.com/politrons/agent_smith_coding#readme",
+  "bugs": {
+    "url": "https://github.com/politrons/agent_smith_coding/issues"
+  },
+  "keywords": [
+    "agent",
+    "coding",
+    "mcp",
+    "fastagent",
+    "ollama",
+    "local-ai",
+    "vscode"
+  ],
+  "galleryBanner": {
+    "color": "#001607",
+    "theme": "dark"
+  },
+  "pricing": "Free",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Machine Learning",
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:agentSmithCoding.chat",
+    "onCommand:agentSmithCoding.openChat",
+    "onCommand:agentSmithCoding.clearChat",
+    "onCommand:agentSmithCoding.stop",
+    "onCommand:agentSmithCoding.askBrowser",
+    "onCommand:agentSmithCoding.askWorkflow",
+    "onCommand:agentSmithCoding.askCoder",
+    "onCommand:agentSmithCoding.askFilesystem",
+    "onCommand:agentSmithCoding.askMemory",
+    "onCommand:agentSmithCoding.askPlanner",
+    "onCommand:agentSmithCoding.askTerminal"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "agentSmithCoding",
+          "title": "Agent Smith",
+          "icon": "resources/agent-smith-activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "agentSmithCoding": [
+        {
+          "id": "agentSmithCoding.chat",
+          "name": "Chat",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "agentSmithCoding.openChat",
+        "title": "Agent Smith Coding: Open Chat"
+      },
+      {
+        "command": "agentSmithCoding.clearChat",
+        "title": "Agent Smith Coding: Clear Chat"
+      },
+      {
+        "command": "agentSmithCoding.stop",
+        "title": "Agent Smith Coding: Stop"
+      },
+      {
+        "command": "agentSmithCoding.askBrowser",
+        "title": "Agent Smith Coding: Ask Browser"
+      },
+      {
+        "command": "agentSmithCoding.askWorkflow",
+        "title": "Agent Smith Coding: Ask Workflow"
+      },
+      {
+        "command": "agentSmithCoding.askCoder",
+        "title": "Agent Smith Coding: Ask Coder"
+      },
+      {
+        "command": "agentSmithCoding.askFilesystem",
+        "title": "Agent Smith Coding: Ask Filesystem"
+      },
+      {
+        "command": "agentSmithCoding.askMemory",
+        "title": "Agent Smith Coding: Ask Memory"
+      },
+      {
+        "command": "agentSmithCoding.askPlanner",
+        "title": "Agent Smith Coding: Ask Planner"
+      },
+      {
+        "command": "agentSmithCoding.askTerminal",
+        "title": "Agent Smith Coding: Ask Terminal"
+      }
+    ],
+    "configuration": {
+      "title": "Agent Smith Coding",
+      "properties": {
+        "agentSmithCoding.pythonPath": {
+          "type": "string",
+          "default": "",
+          "description": "Python interpreter that can import open_agent_coding. Empty means auto-detect project .venv, Homebrew Python 3.14, then python3."
+        },
+        "agentSmithCoding.projectPath": {
+          "type": "string",
+          "default": "/Users/politrons/development/agent_smith_coding",
+          "description": "Path to the Agent Smith Coding project root."
+        },
+        "agentSmithCoding.targetWorkspace": {
+          "type": "string",
+          "default": "",
+          "description": "Optional project folder the agent should work on. Empty means the active VS Code workspace folder."
+        },
+        "agentSmithCoding.defaultAgent": {
+          "type": "string",
+          "default": "coding_workflow",
+          "enum": [
+            "browser",
+            "coding_workflow",
+            "coder",
+            "filesystem",
+            "memory",
+            "planner",
+            "terminal"
+          ],
+          "description": "Internal default FastAgent workflow. The normal chat UI keeps this transparent and only exposes model selection."
+        },
+        "agentSmithCoding.defaultModel": {
+          "type": "string",
+          "default": "qwen3-coder:30b",
+          "description": "Legacy default coding model. Prefer agentSmithCoding.defaultCodingModel for the chat UI."
+        },
+        "agentSmithCoding.defaultCodingModel": {
+          "type": "string",
+          "default": "qwen3-coder:30b",
+          "description": "Default local Ollama model for the Coding agent."
+        },
+        "agentSmithCoding.defaultBrowserModel": {
+          "type": "string",
+          "default": "qwen3.5:latest",
+          "description": "Default local Ollama model for the Browser agent. This follows the Dive-into-Python Browser MCP POC."
+        },
+        "agentSmithCoding.toolModel": {
+          "type": "string",
+          "default": "qwen3.5:latest",
+          "description": "Preferred local Ollama model for MCP helper agents such as Memory, Planner, and File System."
+        },
+        "agentSmithCoding.memoryModel": {
+          "type": "string",
+          "default": "",
+          "description": "Optional Ollama model override for the Memory MCP agent. Empty uses the selected Browser model."
+        },
+        "agentSmithCoding.plannerModel": {
+          "type": "string",
+          "default": "",
+          "description": "Optional Ollama model override for the Sequential Thinking planner agent. Empty uses the selected Browser model."
+        },
+        "agentSmithCoding.filesystemModel": {
+          "type": "string",
+          "default": "",
+          "description": "Optional Ollama model override for the Filesystem MCP agent. Empty uses the selected Browser model."
+        },
+        "agentSmithCoding.browserModel": {
+          "type": "string",
+          "default": "",
+          "description": "Optional Ollama model override for the Browser MCP agent. Empty uses the selected Browser model or defaultBrowserModel."
+        },
+        "agentSmithCoding.coderModel": {
+          "type": "string",
+          "default": "",
+          "description": "Optional Ollama model override for the Coder agent. Empty uses the selected Coding model or defaultCodingModel."
+        },
+        "agentSmithCoding.modelOptions": {
+          "type": "array",
+          "default": [
+            "qwen3-coder:30b",
+            "qwen3.5:latest",
+            "gpt-oss:20b",
+            "llama3.1:8b",
+            "gemma4:31b",
+            "qwen2.5-coder:32b"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Shared fallback model list. Values are Ollama model names; the extension passes them as generic.<model> to FastAgent."
+        },
+        "agentSmithCoding.codingModelOptions": {
+          "type": "array",
+          "default": [
+            "qwen3-coder:30b",
+            "qwen3.5:latest",
+            "gpt-oss:20b",
+            "qwen2.5-coder:32b",
+            "gemma4:31b",
+            "llama3.1:8b"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Models shown in the Coding selector."
+        },
+        "agentSmithCoding.browserModelOptions": {
+          "type": "array",
+          "default": [
+            "qwen3.5:latest",
+            "gpt-oss:20b",
+            "llama3.1:8b",
+            "qwen3-coder:30b",
+            "gemma4:31b",
+            "qwen2.5-coder:32b"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Models shown in the Browser selector."
+        },
+        "agentSmithCoding.accentColor": {
+          "type": "string",
+          "default": "#00ff66",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Accent color used by the chat UI."
+        },
+        "agentSmithCoding.chatFontFamily": {
+          "type": "string",
+          "default": "",
+          "description": "Optional CSS font-family for the chat UI. Empty uses the built-in terminal-style font stack."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^2.15.0",
+    "typescript": "^5.4.5"
+  }
+}

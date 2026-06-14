@@ -1,0 +1,12 @@
+# Project exclude paths
+/.venv/
+__pycache__/
+.pytest_cache/
+.coverage
+coverage.xml
+.uv-cache/
+.DS_Store
+.idea/
+.html
+node_modules
+/node_modules/

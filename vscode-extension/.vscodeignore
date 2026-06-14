@@ -1,0 +1,14 @@
+node_modules/**
+src/**
+.vscode/**
+*.vsix
+tsconfig.json
+package-lock.json
+
+!out/**
+!resources/**
+resources/open-agent.svg
+!README.md
+!CHANGELOG.md
+!SUPPORT.md
+!package.json

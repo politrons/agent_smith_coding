@@ -1,0 +1,15 @@
+{
+  "name": "agent-smith-coding-mcp-runtime",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Node MCP runtime dependencies for Agent Smith Coding.",
+  "scripts": {
+    "setup:mcp": "npm install"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/server-filesystem": "2026.1.14",
+    "@modelcontextprotocol/server-memory": "2025.11.25",
+    "@modelcontextprotocol/server-sequential-thinking": "2025.12.18",
+    "@playwright/mcp": "0.0.75"
+  }
+}

@@ -1,0 +1,2 @@
+[console_scripts]
+open-agent-coding = open_agent_coding.app:cli

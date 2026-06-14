@@ -1,0 +1,56 @@
+default_model: "generic.qwen3.5:latest"
+llm_retries: 0
+
+logger:
+  transports: [console]
+  level: info
+  progress_display: true
+
+usage_telemetry:
+  enabled: false
+
+generic:
+  api_key: "ollama"
+  base_url: "${OLLAMA_BASE_URL:http://localhost:11434/v1}"
+
+mcp:
+  servers:
+    filesystem:
+      transport: "stdio"
+      command: "/Users/politrons/development/agent_smith_coding/node_modules/.bin/mcp-server-filesystem"
+      args:
+        - "${MCP_FILESYSTEM_ROOT:/Users/politrons/development/agent_smith_coding}"
+      read_timeout_seconds: 60
+
+    sequential_thinking:
+      transport: "stdio"
+      command: "/Users/politrons/development/agent_smith_coding/node_modules/.bin/mcp-server-sequential-thinking"
+      read_timeout_seconds: 60
+
+    memory:
+      transport: "stdio"
+      command: "/Users/politrons/development/agent_smith_coding/node_modules/.bin/mcp-server-memory"
+      env:
+        MEMORY_FILE_PATH: "${MCP_MEMORY_FILE_PATH:/Users/politrons/development/agent_smith_coding/data/default-memory.jsonl}"
+      read_timeout_seconds: 45
+
+    browser:
+      transport: "stdio"
+      command: "/Users/politrons/development/agent_smith_coding/node_modules/.bin/playwright-mcp"
+      args:
+        - "--headless"
+        - "--browser"
+        - "firefox"
+      read_timeout_seconds: 60
+
+    terminal:
+      transport: "stdio"
+      command: "/Users/politrons/development/agent_smith_coding/.venv/bin/python"
+      args:
+        - "-m"
+        - "open_agent_coding.terminal_mcp"
+      env:
+        MCP_TERMINAL_ROOT: "${MCP_FILESYSTEM_ROOT:/Users/politrons/development/agent_smith_coding}"
+        MCP_TERMINAL_TIMEOUT_SECONDS: "${MCP_TERMINAL_TIMEOUT_SECONDS:120}"
+        AGENT_SMITH_TERMINAL_LOG: "${AGENT_SMITH_TERMINAL_LOG:/Users/politrons/development/agent_smith_coding/data/terminal-events.jsonl}"
+      read_timeout_seconds: 300
